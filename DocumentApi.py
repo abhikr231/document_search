@@ -26,6 +26,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -42,7 +43,10 @@ will be based on how well you utilize the given data to craft an effective solut
 
 Best Input:"""
 
-prompt = PromptTemplate(input_variables=["main_input", "sample_input_1", "sample_input_2", "sample_input_3", "sample_input_4"], template=template)
+prompt = PromptTemplate(
+    input_variables=["main_input", "sample_input_1", "sample_input_2", "sample_input_3", "sample_input_4"],
+    template=template)
+
 
 def extract_paragraphs_from_docx(docx_path):
     paragraphs = []
@@ -54,13 +58,16 @@ def extract_paragraphs_from_docx(docx_path):
             paragraphs.append(para)
     return paragraphs
 
+
 def get_paragraph_style(para):
     para_style = para.style.name
     return para_style
 
+
 def is_heading_style(para):
     heading_styles = ['Heading 1', 'Heading 2', 'Heading 3', 'Heading 4', 'Heading 5', 'Heading 6']
     return any(style in get_paragraph_style(para) for style in heading_styles)
+
 
 def get_key_from_paragraph(para):
     first_word = para.text.strip().split()[0]
@@ -69,6 +76,7 @@ def get_key_from_paragraph(para):
     elif is_heading_style(para.runs[0]):
         return " ".join(para.text.strip().split()[:3]).rstrip('.').rstrip(':')
     return None
+
 
 def create_topics_map(paragraphs):
     topics_map = {}
@@ -94,11 +102,14 @@ def create_topics_map(paragraphs):
 
     return topics_map
 
+
 def download_file_from_google_drive(url, output_file):
     gdown.download(url, output_file, quiet=False)
 
+
 llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=0)
 finetune_chain = LLMChain(llm=llm, prompt=prompt)
+
 
 @app.route('/find_paragraphs', methods=['POST'])
 def search_topic_paragraphs():
@@ -141,7 +152,7 @@ def search_topic_paragraphs():
     result = {}
     for topic in topics:
         if topic in topics_map:
-            #result[topic] = topics_map[topic]
+            # result[topic] = topics_map[topic]
             result[topic] = [value for value in topics_map[topic] if value != topic]
         else:
             print("Topic not found in the topics map. Searching in the document...")
@@ -158,14 +169,14 @@ def search_topic_paragraphs():
 
     return jsonify(result)
 
+
 @app.route('/find/paragraphs', methods=['POST'])
-def search_topic_paragraphs():
+def search_paragraphs():
     request_data = request.json
     topics = request_data.get('topics', [])
     file_path = request_data.get('docx_file_path', '')
     # Print the size of the topics list
     print(f"Size of topics: {len(topics)}")
-
 
     # Print the values in the topics list
     print("Values in topics:")
@@ -192,7 +203,7 @@ def search_topic_paragraphs():
     result = {}
     for topic in topics:
         if topic in topics_map:
-            #result[topic] = topics_map[topic]
+            # result[topic] = topics_map[topic]
             result[topic] = [value for value in topics_map[topic] if value != topic]
         else:
             print("Topic not found in the topics map. Searching in the document...")
@@ -221,10 +232,11 @@ def get_best_input():
     sample_input_4 = data.get('sample_input_4', '')
 
     best_input = finetune_chain.predict(main_input=main_input, sample_input_1=sample_input_1,
-                               sample_input_2=sample_input_2, sample_input_3=sample_input_3,
-                               sample_input_4=sample_input_4)
+                                        sample_input_2=sample_input_2, sample_input_3=sample_input_3,
+                                        sample_input_4=sample_input_4)
 
     return jsonify({'best_input': best_input})
+
 
 @app.route('/question-answering', methods=['POST'])
 def question_answering():
@@ -258,6 +270,7 @@ def question_answering():
 
     return jsonify({'answer': answer})
 
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     # Check if the POST request has the file part
@@ -274,11 +287,12 @@ def upload_file():
         return jsonify({"file_path": file_path})
     return jsonify({"error": "File not allowed"}), 400
 
+
 @app.route('/')
 def hello_world():
     return 'welcome to flask app'
-    
+
 
 if __name__ == '__main__':
-    app.run(debug=True,port=8080)
+    app.run(debug=True, port=8080)
 
