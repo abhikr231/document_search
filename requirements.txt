@@ -5,4 +5,5 @@ langchain==0.0.240
 openai==0.27.8
 python-docx==0.8.11
 python-dotenv==1.0.0
-
+gdown==4.7.1
+tiktoken==0.4.0

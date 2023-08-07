@@ -6,15 +6,28 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+from werkzeug.utils import secure_filename
 import os
 import docx
 from dotenv import load_dotenv
 from docx import Document
+import gdown
 
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 app = Flask(__name__)
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'docx'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 template = """Your task is to use the Main Input: {main_input}  and the four sample inputs provided which are
@@ -52,9 +65,9 @@ def is_heading_style(para):
 def get_key_from_paragraph(para):
     first_word = para.text.strip().split()[0]
     if is_heading_style(para):
-        return para.text.strip().rstrip('.')
+        return para.text.strip().rstrip('.').rstrip(':')
     elif is_heading_style(para.runs[0]):
-        return " ".join(para.text.strip().split()[:3]).rstrip('.')
+        return " ".join(para.text.strip().split()[:3]).rstrip('.').rstrip(':')
     return None
 
 def create_topics_map(paragraphs):
@@ -66,7 +79,7 @@ def create_topics_map(paragraphs):
 
         if key:
             if current_topic:
-                current_topic = current_topic.strip().rstrip('.')
+                current_topic = current_topic.strip().rstrip('.').rstrip(':')
                 topics_map[current_topic] = related_paragraphs
                 related_paragraphs = []
 
@@ -76,12 +89,13 @@ def create_topics_map(paragraphs):
             related_paragraphs.append(para.text.strip())
 
     if current_topic is not None:
-        current_topic = current_topic.strip().rstrip('.')
+        current_topic = current_topic.strip().rstrip('.').rstrip(':')
         topics_map[current_topic] = related_paragraphs
 
     return topics_map
 
-
+def download_file_from_google_drive(url, output_file):
+    gdown.download(url, output_file, quiet=False)
 
 llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=0)
 finetune_chain = LLMChain(llm=llm, prompt=prompt)
@@ -91,20 +105,56 @@ def search_topic_paragraphs():
     request_data = request.json
     topics = request_data.get('topics', [])
     file_path = request_data.get('docx_file_path', '')
+    # Print the size of the topics list
+    print(f"Size of topics: {len(topics)}")
 
-    if not file_path:
+    # Create a 'temp' directory in the current working directory
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    filename = 'temp.docx'
+    output_file = os.path.join(temp_dir, filename)
+    print(output_file)
+    download_file_from_google_drive(file_path, output_file)
+
+    # Print the values in the topics list
+    print("Values in topics:")
+    for topic in topics:
+        print(topic)
+    if not output_file:
         return jsonify({"error": "Document file path not provided."}), 400
 
     # Load the document and create topics_map
-    paragraphs = extract_paragraphs_from_docx(file_path)
+    paragraphs = extract_paragraphs_from_docx(output_file)
     topics_map = create_topics_map(paragraphs)
+
+    def spasifc(search_topic, doc_paragraphs):
+        for i in range(len(doc_paragraphs)):
+            if search_topic in doc_paragraphs[i].text:
+                result_paragraphs = [doc_paragraphs[i].text]
+                for next_para in doc_paragraphs[i + 1:]:
+                    if is_heading_style(next_para):
+                        break
+                    result_paragraphs.append(next_para.text)
+                return result_paragraphs
+        return None
 
     result = {}
     for topic in topics:
         if topic in topics_map:
-            result[topic] = topics_map[topic]
+            #result[topic] = topics_map[topic]
+            result[topic] = [value for value in topics_map[topic] if value != topic]
         else:
-            result[topic] = None
+            print("Topic not found in the topics map. Searching in the document...")
+            result_paragraphs = spasifc(topic, paragraphs)  # Note: here we use the original paragraphs variable
+
+            if result_paragraphs:
+                print(f"Found the text in the following paragraphs:")
+                result[topic] = result_paragraphs
+                for paragraph in result_paragraphs:
+                    print(paragraph)
+            else:
+                print("Text not found in the document.")
+                result[topic] = None
 
     return jsonify(result)
 
@@ -132,7 +182,14 @@ def question_answering():
     doc_path = data.get('doc_path')
     query = data.get('query')
 
-    doc = Document(doc_path)
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    filename = 'temp.docx'
+    output_file = os.path.join(temp_dir, filename)
+    print(output_file)
+    download_file_from_google_drive(doc_path, output_file)
+
+    doc = Document(output_file)
     raw_text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
     text_splitter = CharacterTextSplitter(
         separator="\n",
@@ -151,10 +208,23 @@ def question_answering():
 
     return jsonify({'answer': answer})
 
-@app.route('/')
-def hello_world():
-    return 'welcome to flask app'
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # Check if the POST request has the file part
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    # If the user does not select a file, the browser submits an empty part without a filename
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        return jsonify({"file_path": file_path})
+    return jsonify({"error": "File not allowed"}), 400
 
 
 if __name__ == '__main__':
-    app.run(debug=True,port=8000)
+    app.run(debug=True,port=8080)
+
