@@ -158,6 +158,56 @@ def search_topic_paragraphs():
 
     return jsonify(result)
 
+@app.route('/find/paragraphs', methods=['POST'])
+def search_topic_paragraphs():
+    request_data = request.json
+    topics = request_data.get('topics', [])
+    file_path = request_data.get('docx_file_path', '')
+    # Print the size of the topics list
+    print(f"Size of topics: {len(topics)}")
+
+
+    # Print the values in the topics list
+    print("Values in topics:")
+    for topic in topics:
+        print(topic)
+    if not file_path:
+        return jsonify({"error": "Document file path not provided."}), 400
+
+    # Load the document and create topics_map
+    paragraphs = extract_paragraphs_from_docx(file_path)
+    topics_map = create_topics_map(paragraphs)
+
+    def spasifc(search_topic, doc_paragraphs):
+        for i in range(len(doc_paragraphs)):
+            if search_topic in doc_paragraphs[i].text:
+                result_paragraphs = [doc_paragraphs[i].text]
+                for next_para in doc_paragraphs[i + 1:]:
+                    if is_heading_style(next_para):
+                        break
+                    result_paragraphs.append(next_para.text)
+                return result_paragraphs
+        return None
+
+    result = {}
+    for topic in topics:
+        if topic in topics_map:
+            #result[topic] = topics_map[topic]
+            result[topic] = [value for value in topics_map[topic] if value != topic]
+        else:
+            print("Topic not found in the topics map. Searching in the document...")
+            result_paragraphs = spasifc(topic, paragraphs)  # Note: here we use the original paragraphs variable
+
+            if result_paragraphs:
+                print(f"Found the text in the following paragraphs:")
+                result[topic] = result_paragraphs
+                for paragraph in result_paragraphs:
+                    print(paragraph)
+            else:
+                print("Text not found in the document.")
+                result[topic] = None
+
+    return jsonify(result)
 
 
 @app.route('/get_best_input', methods=['POST'])
@@ -224,6 +274,10 @@ def upload_file():
         return jsonify({"file_path": file_path})
     return jsonify({"error": "File not allowed"}), 400
 
+@app.route('/')
+def hello_world():
+    return 'welcome to flask app'
+    
 
 if __name__ == '__main__':
     app.run(debug=True,port=8080)
