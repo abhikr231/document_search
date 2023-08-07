@@ -271,6 +271,33 @@ def question_answering():
     return jsonify({'answer': answer})
 
 
+@app.route('/question/answering', methods=['POST'])
+def questionAnswering():
+    data = request.get_json()
+    doc_path = data.get('doc_path')
+    query = data.get('query')
+
+
+    doc = Document(doc_path)
+    raw_text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    text_splitter = CharacterTextSplitter(
+        separator="\n",
+        chunk_size=800,
+        chunk_overlap=10,
+    )
+    texts = text_splitter.split_text(raw_text)
+
+    embeddings = OpenAIEmbeddings()
+    docsearch = FAISS.from_texts(texts, embeddings)
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=0)
+    chain = load_qa_chain(llm=llm, chain_type="stuff")
+
+    docs = docsearch.similarity_search(query)
+    answer = chain.run(input_documents=docs, question=query)
+
+    return jsonify({'answer': answer})
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     # Check if the POST request has the file part
