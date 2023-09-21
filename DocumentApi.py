@@ -19,7 +19,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'docx'}
+ALLOWED_EXTENSIONS = {'docx','doc'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
