@@ -11,6 +11,7 @@ import os
 import docx
 from dotenv import load_dotenv
 from docx import Document
+from flask import Flask, request, send_file, jsonify
 import gdown
 
 load_dotenv()
@@ -314,6 +315,14 @@ def upload_file():
         return jsonify({"file_path": file_path})
     return jsonify({"error": "File not allowed"}), 400
 
+@app.route('/download/<path:filename>', methods=['GET'])
+def download_file(filename):
+    file_path = os.path.join(filename)
+    print("File Path:", file_path)  # Add this line for debugging
+    if os.path.exists(file_path):
+        return send_file(file_path, as_attachment=True)
+    else:
+        return jsonify({"error": "File not found"}), 404
 
 @app.route('/')
 def hello_world():
