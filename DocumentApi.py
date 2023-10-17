@@ -170,10 +170,10 @@ def search_topic_paragraphs():
         for i in range(len(doc_paragraphs)):
             if search_topic in doc_paragraphs[i].text:
                 result_paragraphs = [doc_paragraphs[i].text]
-                for next_para in doc_paragraphs[i + 1:]:
-                    if is_heading_style(next_para):
-                        break
-                    result_paragraphs.append(next_para.text)
+                #for next_para in doc_paragraphs[i + 1:]:
+                 #   if is_heading_style(next_para):
+                  #      break
+                   # result_paragraphs.append(next_para.text)
                 return result_paragraphs
         return None
 
