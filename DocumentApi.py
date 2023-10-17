@@ -48,6 +48,23 @@ prompt = PromptTemplate(
     input_variables=["main_input", "sample_input_1", "sample_input_2", "sample_input_3", "sample_input_4"],
     template=template)
 
+# Define the template for generating responses
+template_topic = """
+Legal Clause Generation
+
+**Legal Topic:** {input_text}
+
+As an experienced legal professional, your task is to provide legal clauses for the topic: "{input_text}." Your response should include typical legal clauses or content that can be incorporated into a legal document, such as a Non-Disclosure Agreement (NDA).
+
+[Note: Each request for a specific legal topic will provide unique and relevant legal clauses.]
+"""
+
+# Create a PromptTemplate with only "input_text" as an input variable
+prompt_topic = PromptTemplate(
+    input_variables=["input_text"],  # Include only "input_text" here
+    template=template_topic
+)
+
 
 def extract_paragraphs_from_docx(docx_path):
     paragraphs = []
@@ -110,7 +127,17 @@ def download_file_from_google_drive(url, output_file):
 
 llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=0)
 finetune_chain = LLMChain(llm=llm, prompt=prompt)
+finetune_chain_topic = LLMChain(llm=llm, prompt=prompt_topic)
 
+@app.route('/generate_response', methods=['POST'])
+def generate_response():
+    data = request.get_json()
+    input_text = data.get('input_text', '')
+
+    # Generate a response using the model
+    response = finetune_chain_topic.predict(input_text=input_text)
+
+    return jsonify({'response': response})
 
 @app.route('/find_paragraphs', methods=['POST'])
 def search_topic_paragraphs():
